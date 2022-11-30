@@ -23,7 +23,10 @@ fun main(vararg args: String) {
 const val DIRECT_ROUTE = "direct:twitter"
 const val COUNT_ROUTE = "direct:extractor"
 const val LOG_ROUTE = "direct:log"
+const val FILTER_ROUTE = "direct:filter"
 const val INDEX_VIEW = "index"
+const val MAX_NUM = 5
+const val NUM_CHARS = 4
 
 @Controller
 class SearchController(private val producerTemplate: ProducerTemplate) {
@@ -43,6 +46,18 @@ class Router(meterRegistry: MeterRegistry) : RouteBuilder() {
 
     override fun configure() {
         from(DIRECT_ROUTE)
+            .process { exchange ->
+                val keywords: String = exchange.getIn().getHeader("keywords") as? String ?: ""
+                val (max, remain) = keywords.split(" ").partition { it.startsWith("max") }
+                exchange.getIn().setHeader("keywords", remain.joinToString(" "))
+                exchange.getIn().setHeader("count", MAX_NUM)
+                max.firstOrNull()
+                    ?.drop(NUM_CHARS)
+                    ?.toIntOrNull()
+                    ?.let { count ->
+                        exchange.getIn().setHeader("count", count)
+                    }
+            }
             .toD("twitter-search:\${header.keywords}")
             .wireTap(LOG_ROUTE)
             .wireTap(COUNT_ROUTE)
